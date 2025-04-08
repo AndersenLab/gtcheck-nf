@@ -172,3 +172,16 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Nextflow logs
+.nextflow.log*
+
+# Nextflow cache
+.nextflow/
+
+# Nextflow pipeline
+pipeline_info/
+cache/
+
+.DS_Store/
+**/.DS_Store/
