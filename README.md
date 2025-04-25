@@ -28,7 +28,7 @@ nextflow main.nf --strain_dir=/path/to/strain/vcfs --sample_sheet=/path/to/sampl
     --help                Set to 'true' for usage                                 false
     --species             Species: 'c_elegans', 'c_tropicalis' or 'c_briggsae'    (required if strain_dir not defined)
     --release             CaeNDR release for genome lookup values                 (required if strain_dir not defined)
-    --sample_sheet        Sheet listing sample vcf names, one per line            (required)
+    --sample_sheet        Sheet listing strain and sample vcf names, one per line (required)
     --sample_dir          Path to sample directory                                (required)
     --strain_dir          Path to strain vcf directory                            (required if species or release no defined)
     -output-dir           Output destination directory                            GTcheck_{date}
@@ -81,7 +81,7 @@ If the directory containing strain VCFs is not specified, the species and releas
 
 ## --sample_sheet (required)
 
-Path to sample sheet containing list of VCF sample names, one per line
+Path to sample sheet containing list of tab-separated strain and VCF sample name pairs, one per line
 
 ## --sample_dir (required)
 
@@ -99,7 +99,8 @@ Output destination directory
 
 ```
 ├── gtcheck.txt
-└── gtcheck.pdf
+├── gtcheck.pdf
+└── versions.txt
 ```
 
 # Relevant docker images

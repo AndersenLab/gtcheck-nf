@@ -3,19 +3,19 @@ process BCFTOOLS_MERGE_VCFS {
     tag "${meta.id}"
 
     input:
-        tuple val(meta), path(*)
+        tuple val(meta), path("*")
 
     output:
-        tuple val(meta), path(vcf), path(vcf_index), emit: vcf
+        tuple val(meta), path("${meta.id}_merged.vcf.gz"), path("${meta.id}_merged.vcf.gz.tbi"), emit: vcf
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
     def args = task.ext.args ?: ''
-    def avail_mem = (task.memory.giga).intValue() - 1
     """
-    bcftools merge *.vc.gz -Oz -Wtbi -o ${meta.id}_merged.vcf.gz
+    bcftools merge *.vcf.gz -Oz -o ${meta.id}_merged.vcf.gz
+    bcftools index -t ${meta.id}_merged.vcf.gz
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

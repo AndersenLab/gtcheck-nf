@@ -16,14 +16,14 @@ process BCFTOOLS_GT_CHECK {
     def avail_mem = (task.memory.giga).intValue() - 1
     """
     if [[ ${meta1.id} == "samples" ]]; then
-        SAMPLES="${meta1.id}"
-        STRAINS="${meta2.id}"
+        SAMPLES="merged1.vcf.gz"
+        STRAINS="merged2.vcf.gz"
     else
-        SAMPLES="${meta2.id}"
-        STRAINS="${meta1.id}"
+        SAMPLES="merged2.vcf.gz"
+        STRAINS="merged1.vcf.gz"
     fi
 
-    bcftools gtcheck --no-HWE-prob -E 0 --g \${STRAINS} \${SAMPLES} > gtcheck.txt
+    bcftools gtcheck --no-HWE-prob -e 0 --g \${STRAINS} \${SAMPLES} > gtcheck.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
