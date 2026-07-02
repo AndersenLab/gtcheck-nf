@@ -79,17 +79,21 @@ If the directory containing strain VCFs is not specified, the species and releas
 
 If the directory containing strain VCFs is not specified, the species and release date can be used to look up existing files for c_elegans, c_briggsae, or c_tropicalis
 
-## --sample_sheet (required)
+## --sample_sheet (optional)
 
-Path to sample sheet containing list of tab-separated strain and VCF sample name pairs, one per line
+Path to sample sheet containing list of sample names for comparison
 
 ## --sample_dir (required)
 
 Path to folder containing sample VCF files
 
-## --strain_dir (optional if species and release are specified)
+## --vcf (optional if species and release are specified)
 
-Path to folder containing strain VCF files
+Path to strain VCF file
+
+## --strain_sheet (optional)
+
+Path to strain sheet containing list of sample names for comparison
 
 ## -output-dir (default: GTcheck_{date})
 
