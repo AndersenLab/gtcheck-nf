@@ -112,7 +112,7 @@ workflow {
 
     if (params.sample_sheet == null) {
         ch_samples = channel.fromPath("${params.sample_dir}/*.g.vcf.gz")
-            .buffer( n:1 )
+            .flatten()
             .map { row -> [[id: row.split("/")[1].split(".g.")[0]], row] }
     } else {
         ch_samples = channel.fromPath(params.sample_sheet)
