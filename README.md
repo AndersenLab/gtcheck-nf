@@ -55,7 +55,7 @@ conda activate /data/eande106/software/conda_envs/nf24_env
 *This command uses a test dataset*
 
 ```
-nextflow run -latest andersenlab/caendrprep-nf --debug
+nextflow run -latest andersenlab/gtcheck-nf --debug
 ```
 
 >[!Note]

@@ -21,20 +21,23 @@ def getGenomeAttribute(attribute, required=true) {
 }
 
 if (params.help == false){
-    if (params.sample_sheet == null || params.sample_dir == null){
-        println "Both sample_sheet and sample_dir must be defined"
+    if (params.sample_dir == null){
+        println "sample_dir must be defined"
         exit 1
     }
-    if (params.strain_dir == null){
-        if (params.species == null || params.release == null){
-            println "Either strain_dir or species and release must be defined"
-            exit 1
-        } else {
-            variation_dir = getGenomeAttribute('variation_dir')
-            strain_dir = "${variation_dir}/${params.release}/vcf/strain_vcf"
-        }
+    if (params.vcf == null && (params.species == null || params.release == null)){
+        println "Either vcf or species and release must be defined"
+        exit 1
+    }
+    if (params.markers == null){
+        println "markers must be defined"
+        exit 1
+    }
+    if (params.vcf == null) {
+        variation_dir = getGenomeAttribute('variation_dir')
+        vcf = "${variation_dir}/${params.release}/vcf/WI.${params.release}.hard-filter.vcf.gz"
     } else {
-        strain_dir = params.strain_dir
+        vcf = params.vcf
     }
 }
 
@@ -62,16 +65,18 @@ Compare new sample variants against existing samples to verify identity.
 
 nextflow main.nf --species=c_elegans --release=20250331 --sample_sheet=/path/to/sample/sheet --sample_dir=/path/to/samples -output-dir=/path/to/results
 
-nextflow main.nf --strain_dir=/path/to/strain/vcfs --sample_sheet=/path/to/sample/sheet --sample_dir=/path/to/samples -output-dir=/path/to/results
+nextflow main.nf --vcf=/path/to/vcf --sample_sheet=/path/to/sample/sheet --sample_dir=/path/to/samples -output-dir=/path/to/results
 
 
     parameters           description                                              Set/Default
     ==========           ===========                                              ========================
     --species             Species: 'c_elegans', 'c_tropicalis' or 'c_briggsae'    ${params.species}
     --release             CaeNDR release for genome lookup values                 ${params.release}
-    --sample_sheet        Sheet listing strain and sample vcf names, one per line ${params.sample_sheet}
+    --sample_sheet        Sheet listing sample names and gvcf paths, one per line ${params.sample_sheet}
     --sample_dir          Path to sample directory                                ${params.sample_dir}
-    --strain_dir          Path to strain vcf directory                            ${strain_dir}
+    --strain_sheet        Sheet listing strain names, one per line (optional)     ${params.sample_sheet}
+    --vcf                 Path to strain vcf                                      ${vcf}
+    --markers             Path to vcf markers                                     ${params.markers}
     -output-dir           Output destination directory                            ${workflow.outputDir}
 
     username                                                                      ${"whoami".execute().in.text}
@@ -89,46 +94,72 @@ if (params.help) {
     exit 1
 }
 
-include { BCFTOOLS_RENAME_SAMPLES } from './modules/bcftools/rename_samples/main'
-include { BCFTOOLS_MERGE_VCFS     } from './modules/bcftools/merge_vcfs/main'
-include { BCFTOOLS_GT_CHECK       } from './modules/bcftools/gt_check/main'
-include { PYTHON_PLOT_GT          } from './modules/python/plot_gt/main'
+include { GVCF2BCF    } from './modules/gvcf2bcf/main'
+include { MERGE_BCFS  } from './modules/merge_bcfs/main'
+include { GTCHECK     } from './modules/gtcheck/main'
+include { PLOT_GT     } from './modules/plot_gt/main'
+
+// If sample_sheet not defined, use all samples in sample_dir
+// If strain_sheet not defined, compare samples against all strains
 
 workflow {
     main:
-    ch_versions = Channel.empty()
-    ch_strains = Channel.fromPath(params.sample_sheet).splitCsv(sep: "\t")
-    ch_orig_strain_vcfs = ch_strains.map{ it: [[id: it[0]], "${strain_dir}/${it[0]}.vcf.gz", "${strain_dir}/${it[0]}.vcf.gz.tbi"] }
-    ch_sample_strain_vcfs = ch_strains.map{ it: [[id: it[0]], "${params.sample_dir}/${it[1]}"] }
+    ch_versions = channel.empty()
+    channel.fromPath( params.vcf, checkIfExists: true )
+        .set { ch_vcf }
+    channel.fromPath( params.markers, checkIfExists: true )
+        .set { ch_markers }
 
-    BCFTOOLS_RENAME_SAMPLES( ch_sample_strain_vcfs )
-    ch_versions = ch_versions.mix(BCFTOOLS_RENAME_SAMPLES.out.versions)
+    if (params.sample_sheet == null) {
+        ch_samples = channel.fromPath("${params.sample_dir}/*.g.vcf.gz")
+            .buffer( n:1 )
+            .map { row -> [[id: row.split("/")[1].split(".g.")[0]], row] }
+    } else {
+        ch_samples = channel.fromPath(params.sample_sheet)
+            .splitCsv ( sep:"\t" )
+            .map { row -> [[id: row[0]], "${params.sample_dir}/${row[0]}.g.vcf.gz"]}
+    }
+    if (params.strain_sheet == null) {
+        ch_strains = channel.of( [] )
+    } else {
+        ch_strains = channel.fromPath(params.strain_sheet)
+    }
 
-    ch_vcfs = BCFTOOLS_RENAME_SAMPLES.out.vcf.map{ it: [it[1], it[2]] }
-        .collect()
-        .map{ it: [[id: 'samples'], it] }
-        .mix( ch_orig_strain_vcfs.map{ it: [it[1], it[2]] }
-            .collect()
-            .map{ it: [[id: 'strains'], it] })
+    GVCF2BCF( ch_samples,
+              ch_markers.first() )
+    ch_versions = ch_versions.mix(GVCF2BCF.out.versions)
+
+    GVCF2BCF.out.bcf
+        .map { row -> [row[1], row[2]]}
+        .collect ( )
+        .map { row -> [[id:"merged"], row] }
+        .set { ch_sample_bcfs }
+
+    MERGE_BCFS( ch_sample_bcfs )
+    ch_versions = ch_versions.mix(MERGE_BCFS.out.versions)
     
-    BCFTOOLS_MERGE_VCFS( ch_vcfs )
-    ch_versions = ch_versions.mix(BCFTOOLS_MERGE_VCFS.out.versions)
+    MERGE_BCFS.out.bcf
+        .set { ch_sample_bcf }
 
-    BCFTOOLS_GT_CHECK( BCFTOOLS_MERGE_VCFS.out.vcf.first(),
-              BCFTOOLS_MERGE_VCFS.out.vcf.last() )
-    ch_versions = ch_versions.mix(BCFTOOLS_GT_CHECK.out.versions)
-    
-    PYTHON_PLOT_GT( BCFTOOLS_GT_CHECK.out.gt)
-    ch_versions = ch_versions.mix(PYTHON_PLOT_GT.out.versions)
+    GTCHECK(
+        ch_sample_bcf,
+        ch_vcf,
+        ch_strains
+        )
+    ch_versions = ch_versions.mix(GTCHECK.out.versions)
+
+    PLOT_GT( GTCHECK.out.gt)
+    ch_versions = ch_versions.mix(PLOT_GT.out.versions)
 
     ch_versions
         .collectFile(name: 'workflow_software_versions.txt', sort: true, newLine: true)
         .set { ch_collated_versions }
 
+
     publish:
-    BCFTOOLS_GT_CHECK.out.gt  >> "."
-    PYTHON_PLOT_GT.out.plot   >> "."
-    ch_collated_versions      >> "."
+    GTCHECK.out.gt       >> "."
+    PLOT_GT.out.plot     >> "."
+    ch_collated_versions >> "."
 }
 
 output {
@@ -155,7 +186,9 @@ workflow.onComplete {
     Release: ${params.release}
     Sample_sheet: ${params.sample_sheet}
     Sample_dir: ${params.sample_dir}
-    Strain_dir: ${strain_dir}
+    Strain_sheet: ${params.strain_sheet}
+    Strain_vcf: ${vcf}
+    Markers: ${params.markers}
     Output-dir: ${workflow.outputDir}
     """
 
